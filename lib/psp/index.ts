@@ -1,5 +1,6 @@
 import "server-only";
 
+import { ehVitrineDemonstracao } from "@/lib/ambiente";
 import { provedorAsaas } from "@/lib/psp/asaas";
 import { provedorMock } from "@/lib/psp/mock";
 import type { ProvedorPagamento } from "@/lib/psp/tipos";
@@ -26,10 +27,20 @@ export function obterProvedor(): ProvedorPagamento {
     // esquecimento passaria a emitir cobrancas ficticias: o cliente veria um QR
     // Code que nunca cai na conta, e o painel nunca confirmaria o pagamento.
     // Falhar imediatamente e muito melhor do que descobrir isso pelo cliente.
-    if (process.env.NODE_ENV === "production") {
+    //
+    // A excecao e a vitrine de demonstracao: um ambiente publicado de proposito
+    // para mostrar o produto antes de a conta no PSP existir. Ela exige a
+    // variavel PERMITIR_PSP_MOCK="sim", declarada a mao.
+    //
+    // O ponto da trava e nunca cair em mock por OMISSAO. Exigir uma variavel
+    // escrita deliberadamente preserva isso: esquecer de configurar continua
+    // derrubando o deploy, porque esquecimento nunca produz a string "sim".
+    // Quando ela esta ligada, a interface avisa em toda tela - inclusive na
+    // pagina publica - que nenhuma cobranca ali e real.
+    if (process.env.NODE_ENV === "production" && !ehVitrineDemonstracao()) {
       throw new Error(
         "PSP_PROVIDER=mock e proibido em producao. " +
-          "Configure PSP_PROVIDER=asaas com ASAAS_API_KEY e ASAAS_WEBHOOK_TOKEN.",
+          'Configure PSP_PROVIDER=asaas com ASAAS_API_KEY e ASAAS_WEBHOOK_TOKEN, ou defina PERMITIR_PSP_MOCK="sim" para publicar uma vitrine de demonstracao com cobrancas ficticias.',
       );
     }
     cache = provedorMock;
@@ -50,6 +61,11 @@ export function obterProvedor(): ProvedorPagamento {
 export function usandoProviderMock(): boolean {
   return obterProvedor().nome === "mock";
 }
+
+// Reexportado por conveniencia: quem ja depende de lib/psp nao precisa
+// importar lib/ambiente separadamente. A definicao mora la para que o layout
+// raiz possa consultar o ambiente sem arrastar os providers consigo.
+export { ehVitrineDemonstracao } from "@/lib/ambiente";
 
 /**
  * Remove qualquer resquicio de dado de cartao antes de persistir um payload.

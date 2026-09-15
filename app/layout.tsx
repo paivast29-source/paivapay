@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { AvisoDemonstracao } from "@/components/ui/aviso-demonstracao";
 import { CORES_LITERAIS } from "@/lib/tema";
 import "./globals.css";
 
@@ -40,7 +41,16 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR" className={inter.variable}>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        {/*
+          Fica no layout raiz para cobrir tudo de uma vez: painel, login e
+          principalmente a pagina publica de pagamento, onde um visitante nao
+          pode confundir a demonstracao com uma cobranca real.
+          Nao renderiza nada fora do ambiente de vitrine.
+        */}
+        <AvisoDemonstracao />
+        {children}
+      </body>
     </html>
   );
 }

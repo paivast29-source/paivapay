@@ -157,6 +157,49 @@ precisa mudar.
 
 ---
 
+## Publicando na Vercel
+
+O build **nao exige variavel nenhuma** - `prisma generate` nao acessa banco e
+nenhum modulo abre conexao durante a compilacao. Mas o site so funciona com um
+Postgres acessivel pela internet: o container do `docker-compose.yml` roda em
+`localhost` e a Vercel nao alcanca a sua maquina.
+
+### Variaveis de ambiente
+
+| Variavel | Obrigatoria | Valor |
+|---|---|---|
+| `DATABASE_URL` | sim | Postgres na nuvem (Neon ou Supabase, ambos tem plano gratuito) |
+| `SESSION_SECRET` | sim | `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+| `APP_URL` | sim | a URL publicada, ex. `https://paivapay.vercel.app` |
+| `PSP_PROVIDER` | sim | `asaas` em operacao real, `mock` na vitrine |
+| `CRON_SECRET` | sim | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `ASAAS_API_KEY` | so com `asaas` | chave da conta |
+| `ASAAS_WEBHOOK_TOKEN` | so com `asaas` | token definido no painel do Asaas |
+| `PERMITIR_PSP_MOCK` | so na vitrine | `sim` |
+
+Depois de configurar `DATABASE_URL`, rode as migrations contra o banco de
+producao a partir da sua maquina:
+
+```bash
+DATABASE_URL="<url-de-producao>" npx prisma migrate deploy
+DATABASE_URL="<url-de-producao>" npx prisma db seed
+```
+
+### Vitrine de demonstracao
+
+Enquanto a conta no Asaas nao existe (Fase 0), da para publicar um ambiente de
+demonstracao com `PSP_PROVIDER=mock` e `PERMITIR_PSP_MOCK=sim`.
+
+A trava que impede mock em producao continua valendo: sem a variavel escrita a
+mao, o deploy falha. O ponto dela e nunca cair em mock por **omissao**, e
+esquecimento nunca produz a string `sim`. Com a vitrine ligada, toda tela -
+inclusive a pagina publica de pagamento - exibe uma faixa avisando que nenhuma
+cobranca ali e real.
+
+**Desligue `PERMITIR_PSP_MOCK` no dia em que o Asaas entrar.**
+
+---
+
 ## Colocando em producao
 
 ### 1. Conta no Asaas
