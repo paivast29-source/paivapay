@@ -176,14 +176,40 @@ Postgres acessivel pela internet: o container do `docker-compose.yml` roda em
 | `ASAAS_API_KEY` | so com `asaas` | chave da conta |
 | `ASAAS_WEBHOOK_TOKEN` | so com `asaas` | token definido no painel do Asaas |
 | `PERMITIR_PSP_MOCK` | so na vitrine | `sim` |
+| `SEED_ADMIN_EMAIL` | 1o deploy | e-mail do primeiro diretor |
+| `SEED_ADMIN_SENHA` | 1o deploy | senha forte, so sua |
+| `SEED_ADMIN_NOME` | 1o deploy | nome exibido no painel |
 
-Depois de configurar `DATABASE_URL`, rode as migrations contra o banco de
-producao a partir da sua maquina:
+**Depois de mudar qualquer variavel na Vercel e preciso refazer o deploy.**
+Alterar a variavel nao afeta o deployment que ja esta no ar.
 
-```bash
-DATABASE_URL="<url-de-producao>" npx prisma migrate deploy
-DATABASE_URL="<url-de-producao>" npx prisma db seed
-```
+### Migrations rodam sozinhas
+
+O `npm run build` executa `scripts/preparar-banco.mjs` antes do `next build`.
+Ele aplica as migrations pendentes e roda o seed, ambos idempotentes.
+
+Isso existe porque apontar `DATABASE_URL` para um Postgres novo nao cria tabela
+nenhuma - o banco nasce vazio. Sem este passo o deploy termina com sucesso, o
+site sobe, e a primeira consulta falha com `relation ... does not exist`. Pior:
+o sintoma aparece longe da causa, porque a tela de login abre normalmente (sem
+cookie, ela nao toca no banco) e so quebra ao enviar o formulario.
+
+Sem `DATABASE_URL` o script nao faz nada e deixa o build seguir - compilar
+continua nao exigindo banco.
+
+### O primeiro usuario
+
+No primeiro deploy, defina `SEED_ADMIN_EMAIL`, `SEED_ADMIN_SENHA` e
+`SEED_ADMIN_NOME`. Sem `SEED_ADMIN_SENHA`, **o deploy falha de proposito**, com
+a instrucao no log.
+
+Nao existe senha padrao em producao: o `.env.example` deste repositorio e
+publico, e qualquer padrao viraria acesso conhecido ao painel financeiro. O seed
+tambem recusa `mudar123` e similares, e exige no minimo 8 caracteres com letras
+e numeros.
+
+E cobrado uma unica vez - assim que o primeiro diretor existir, os deploys
+seguintes nao pedem mais nada, e o seed nunca altera usuario ja cadastrado.
 
 ### Vitrine de demonstracao
 
