@@ -27,7 +27,12 @@ try {
  */
 
 const db = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  adapter: new PrismaPg({
+    // Acompanha a escolha das migrations (ver prisma.config.ts): o seed roda no
+    // mesmo momento do deploy e nao ganha nada em passar pelo pooler.
+    connectionString:
+      process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL,
+  }),
 });
 
 const SENHAS_PROIBIDAS = ["mudar123", "senha123", "admin123", "123456"];

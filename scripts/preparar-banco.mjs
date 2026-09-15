@@ -39,7 +39,9 @@ try {
  *    e melhor descobrir no deploy do que pelo usuario.
  */
 
-const urlBanco = process.env.DATABASE_URL;
+// As migrations preferem a conexao direta quando ela existe - ver o comentario
+// em prisma.config.ts sobre advisory locks e pooler.
+const urlBanco = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
 
 if (!urlBanco) {
   console.log(

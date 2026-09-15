@@ -10,7 +10,27 @@ try {
   // Sem .env local: as variaveis ja devem vir do ambiente (CI, producao).
 }
 
-const urlBanco = process.env.DATABASE_URL;
+/**
+ * Connection string usada pelas MIGRATIONS.
+ *
+ * Provedores serverless como Neon e Supabase entregam dois enderecos para o
+ * mesmo banco:
+ *
+ *   - com pool (host termina em "-pooler"): um PgBouncer em modo transacao.
+ *     E o certo para a aplicacao, porque cada instancia serverless abre a
+ *     propria conexao e o limite do Postgres estoura rapido sem ele.
+ *
+ *   - direto (sem "-pooler"): conexao normal ao Postgres.
+ *
+ * Migrations PRECISAM do endereco direto. Elas usam advisory locks para
+ * garantir que duas nao rodem ao mesmo tempo, e advisory lock nao sobrevive ao
+ * pooling em modo transacao - a migration trava ou falha sem explicacao clara.
+ *
+ * Por isso: se DIRECT_DATABASE_URL existir, ela manda aqui. Caso contrario
+ * usamos DATABASE_URL, o que cobre o desenvolvimento local (Postgres direto,
+ * sem pooler) e provedores que nao separam os dois enderecos.
+ */
+const urlBanco = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
 
 /**
  * Configuracao do Prisma CLI (migrations, seed, studio).
