@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: paivapay-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: paivapay
+      POSTGRES_PASSWORD: paivapay_local
+      POSTGRES_DB: paivapay
+    ports:
+      # 5433 no host para nao conflitar com um Postgres ja instalado na maquina.
+      - "5433:5432"
+    volumes:
+      - paivapay_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paivapay -d paivapay"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  paivapay_pgdata:

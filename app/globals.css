@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   PaivaPay - arquivo unico de tema
+   Referencia: secao 3 da especificacao do produto (v1).
+
+   REGRA: nenhum valor hexadecimal pode ser escrito direto em um componente.
+   Todo componente consome as variaveis definidas aqui, seja pelas utilitarias
+   do Tailwind (bg-marca, text-secundario, border-borda) seja por var(--cor-*).
+
+   O motivo e a secao 3.5: Paiva Work e PaivaPay sao produtos irmaos. Trocar a
+   paleta inteira para um novo produto da familia deve custar a edicao deste
+   arquivo, e nada mais.
+   ========================================================================== */
+
+@theme {
+  /* ---- Marca ------------------------------------------------------------ */
+  --color-marca: #ef4176; /* Rosa PaivaPay - botao primario, links, icones ativos */
+  --color-marca-hover: #d42f5f; /* Rosa escuro - hover e estado pressionado */
+  --color-marca-clara: #fde7ee; /* Rosa claro - fundo de destaque, tags, badges */
+
+  /* ---- Texto ------------------------------------------------------------ */
+  --color-grafite: #141416; /* Texto principal */
+  --color-secundario: #6b6b73; /* Texto secundario, labels */
+
+  /* ---- Superficies e bordas --------------------------------------------- */
+  --color-borda: #e5e5ea; /* Bordas, divisorias */
+  --color-fundo: #fafafa; /* Fundo da aplicacao */
+  --color-superficie: #ffffff; /* Superficie de cards */
+
+  /* ---- Status -----------------------------------------------------------
+     ATENCAO (secao 3.2): o vermelho de erro (#DC2626) e o rosa da marca
+     (#EF4176) sao proximos. Nenhum status pode ser comunicado apenas por cor.
+     Todo status precisa de icone + texto junto. Isso tambem resolve a
+     acessibilidade para usuarios daltonicos. Ver o componente
+     components/ui/status-cobranca.tsx, que impoe essa regra.
+     --------------------------------------------------------------------- */
+  --color-pago: #16a34a; /* Verde - pago */
+  --color-aguardando: #f59e0b; /* Ambar - aguardando / a vencer */
+  --color-vencido: #dc2626; /* Vermelho - vencido / falha */
+
+  /* Fundos suaves dos status, para badges */
+  --color-pago-fundo: #eafaf0;
+  --color-aguardando-fundo: #fef6e7;
+  --color-vencido-fundo: #fdeaea;
+
+  /* ---- Tipografia (secao 3.3) ------------------------------------------- */
+  --font-sans: var(--fonte-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Arial, sans-serif;
+
+  /* ---- Raio de borda ----------------------------------------------------
+     Compartilhado com o Paiva Work (secao 3.5).
+     --------------------------------------------------------------------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* ---- Sombras ---------------------------------------------------------- */
+  --shadow-cartao: 0 1px 2px rgba(20, 20, 22, 0.04),
+    0 1px 3px rgba(20, 20, 22, 0.06);
+  --shadow-elevado: 0 4px 12px rgba(20, 20, 22, 0.08),
+    0 2px 4px rgba(20, 20, 22, 0.04);
+  --shadow-marca: 0 1px 2px rgba(239, 65, 118, 0.24),
+    0 2px 8px rgba(239, 65, 118, 0.16);
+}
+
+/* --------------------------------------------------------------------------
+   Aliases em portugues, conforme instrucao da secao 3.5 da spec
+   ("--cor-marca, --cor-marca-hover, etc").
+   O Tailwind v4 ja emite as variaveis do bloco @theme em :root; estes aliases
+   existem para uso direto em CSS, sem passar pelas utilitarias.
+   -------------------------------------------------------------------------- */
+:root {
+  --cor-marca: var(--color-marca);
+  --cor-marca-hover: var(--color-marca-hover);
+  --cor-marca-clara: var(--color-marca-clara);
+
+  --cor-texto: var(--color-grafite);
+  --cor-texto-secundario: var(--color-secundario);
+
+  --cor-borda: var(--color-borda);
+  --cor-fundo: var(--color-fundo);
+  --cor-superficie: var(--color-superficie);
+
+  --cor-pago: var(--color-pago);
+  --cor-aguardando: var(--color-aguardando);
+  --cor-vencido: var(--color-vencido);
+
+  /* Altura padrao de botao e campo - compartilhada com o Paiva Work.
+     44px atende ao alvo minimo de toque recomendado em telas de celular,
+     que e onde a maioria dos pagadores vai abrir a pagina de pagamento. */
+  --altura-controle: 44px;
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+@layer base {
+  * {
+    border-color: var(--cor-borda);
+  }
+
+  body {
+    background-color: var(--cor-fundo);
+    color: var(--cor-texto);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Secao 3.3: valores monetarios sempre com a variante tabular de numeros,
+     para que os digitos alinhem verticalmente em listas e tabelas. */
+  .valor-monetario {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  .valor-monetario-destaque {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }
+
+  /* Foco visivel e consistente em toda a aplicacao. */
+  :focus-visible {
+    outline: 2px solid var(--cor-marca);
+    outline-offset: 2px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Utilitarias de componente
+   -------------------------------------------------------------------------- */
+@layer components {
+  .cartao {
+    background-color: var(--cor-superficie);
+    border: 1px solid var(--cor-borda);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-cartao);
+  }
+}

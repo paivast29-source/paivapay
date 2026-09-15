@@ -1,0 +1,366 @@
+// =============================================================================
+// PaivaPay - modelo de dados
+// Referencia: secao 9 da especificacao do produto (v1).
+//
+// Convencoes obrigatorias deste schema:
+//
+//  - DINHEIRO SEMPRE EM CENTAVOS, tipo Int. Nunca Float/Decimal/double.
+//    (secao 10, regra 6). Um valor de R$ 1.234,56 e gravado como 123456.
+//
+//  - Os nomes das tabelas seguem a especificacao em portugues via @@map.
+//
+//  - Toda cobranca carrega conta_recebedora_id (secao 4.3). Na v1 aponta
+//    sempre para a unica conta cadastrada, a da Paiva Studio. Esse campo e o
+//    que transforma a v2 de "reescrever o sistema" em "adicionar um modulo" -
+//    nao remova nem torne opcional.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// A partir do Prisma 7 a connection string nao mora mais aqui:
+//  - para as migrations, ela vem de prisma.config.ts
+//  - em tempo de execucao, do driver adapter montado em lib/db.ts
+datasource db {
+  provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+enum Papel {
+  diretor
+  operacional
+}
+
+enum TipoCliente {
+  pf
+  pj
+}
+
+/// Ciclo de vida da cobranca (secao 9).
+/// Fluxo normal: rascunho -> aguardando_pagamento -> pago
+/// Estados alternativos: vencido, cancelado, estornado
+enum StatusCobranca {
+  rascunho
+  aguardando_pagamento
+  pago
+  vencido
+  cancelado
+  estornado
+}
+
+enum FormaPagamento {
+  pix
+  cartao
+  boleto
+}
+
+enum StatusTransacao {
+  pendente
+  confirmada
+  falhou
+  estornada
+}
+
+enum Periodicidade {
+  mensal
+  trimestral
+  anual
+}
+
+/// Tipos de evento no historico da cobranca (tela 8.1 "Detalhe da cobranca").
+enum TipoEventoCobranca {
+  criada
+  enviada
+  visualizada
+  paga
+  vencida
+  cancelada
+  estornada
+  lembrete_enviado
+  recibo_enviado
+}
+
+// -----------------------------------------------------------------------------
+// Usuarios e sessoes (painel administrativo)
+// -----------------------------------------------------------------------------
+
+model Usuario {
+  id           String    @id @default(uuid())
+  nome         String
+  email        String    @unique
+  senhaHash    String    @map("senha_hash")
+  papel        Papel     @default(operacional)
+  ativo        Boolean   @default(true)
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+  ultimoAcesso DateTime? @map("ultimo_acesso")
+
+  sessoes          Sessao[]
+  cobrancasCriadas Cobranca[]     @relation("CobrancaCriadaPor")
+  logsAuditoria    LogAuditoria[]
+
+  @@map("usuarios")
+}
+
+/// Sessao de painel. O token vive em cookie httpOnly; no banco guardamos
+/// apenas o hash SHA-256 dele, para que um dump do banco nao permita
+/// personificar ninguem.
+model Sessao {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique @map("token_hash")
+  usuarioId  String   @map("usuario_id")
+  expiraEm   DateTime @map("expira_em")
+  criadoEm   DateTime @default(now()) @map("criado_em")
+  ip         String?
+  userAgent  String?  @map("user_agent")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([expiraEm])
+  @@map("sessoes")
+}
+
+/// Rate limiting do login e da pagina publica (secao 11).
+/// Uma linha por tentativa; a contagem e feita por janela de tempo.
+model TentativaLogin {
+  id         String   @id @default(uuid())
+  chave      String // email normalizado ou ip
+  ip         String?
+  sucesso    Boolean  @default(false)
+  ocorridoEm DateTime @default(now()) @map("ocorrido_em")
+
+  @@index([chave, ocorridoEm])
+  @@map("tentativas_login")
+}
+
+// -----------------------------------------------------------------------------
+// Clientes
+// -----------------------------------------------------------------------------
+
+model Cliente {
+  id       String      @id @default(uuid())
+  tipo     TipoCliente
+  nome     String
+  /// CPF ou CNPJ, gravado somente com digitos (sem pontos, barra ou traco).
+  documento String     @unique
+  email    String
+  telefone String?
+  /// { cep, logradouro, numero, complemento, bairro, cidade, uf }
+  endereco Json?
+  /// Identificador do mesmo cliente dentro do PSP.
+  idNoPsp  String?     @map("id_no_psp")
+  ativo    Boolean     @default(true)
+  /// Secao 11: registro do consentimento de comunicacao por e-mail.
+  consentimentoEmail   Boolean   @default(false) @map("consentimento_email")
+  consentimentoEmailEm DateTime? @map("consentimento_email_em")
+  criadoEm DateTime    @default(now()) @map("criado_em")
+
+  cobrancas   Cobranca[]
+  recorrencias Recorrencia[]
+
+  @@index([nome])
+  @@map("clientes")
+}
+
+// -----------------------------------------------------------------------------
+// Conta recebedora - preparacao para a v2 (secao 4.3)
+// -----------------------------------------------------------------------------
+
+/// Na v1 existe um unico registro: a conta da Paiva Studio.
+/// Na v2 cada empresa cliente ganha a sua subconta no PSP e passa a ter uma
+/// linha aqui. Nenhuma logica de split deve ser implementada agora.
+model ContaRecebedora {
+  id       String   @id @default(uuid())
+  nome     String
+  idNoPsp  String?  @map("id_no_psp")
+  padrao   Boolean  @default(false)
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  cobrancas Cobranca[]
+
+  @@map("contas_recebedoras")
+}
+
+// -----------------------------------------------------------------------------
+// Cobrancas
+// -----------------------------------------------------------------------------
+
+model Cobranca {
+  id                String   @id @default(uuid())
+  clienteId         String   @map("cliente_id")
+  contaRecebedoraId String   @map("conta_recebedora_id")
+
+  /// Token da URL publica (/pagar/<token>).
+  /// Minimo de 32 caracteres, gerado com crypto.randomBytes (secao 10, regra 5).
+  /// Jamais usar id sequencial aqui: permitiria varrer as cobrancas de outros
+  /// clientes trocando o numero na URL.
+  tokenPublico String @unique @map("token_publico")
+
+  descricao String
+  /// EM CENTAVOS. Soma dos itens.
+  valorTotal Int      @map("valor_total")
+  vencimento DateTime @db.Date
+  status     StatusCobranca @default(rascunho)
+
+  formasPagamentoAceitas FormaPagamento[] @map("formas_pagamento_aceitas")
+
+  /// Id da cobranca dentro do PSP.
+  idNoPsp String? @map("id_no_psp")
+
+  /// Dados de pagamento devolvidos pelo PSP (payload do Pix, linha digitavel do
+  /// boleto, url do checkout de cartao). Nunca contem dado de cartao.
+  dadosPagamento Json? @map("dados_pagamento")
+
+  recorrenciaId String? @map("recorrencia_id")
+  criadoPor     String? @map("criado_por")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  pagoEm        DateTime? @map("pago_em")
+  canceladoEm   DateTime? @map("cancelado_em")
+
+  cliente         Cliente         @relation(fields: [clienteId], references: [id])
+  contaRecebedora ContaRecebedora @relation(fields: [contaRecebedoraId], references: [id])
+  recorrencia     Recorrencia?    @relation(fields: [recorrenciaId], references: [id])
+  criador         Usuario?        @relation("CobrancaCriadaPor", fields: [criadoPor], references: [id])
+
+  itens      ItemCobranca[]
+  transacoes Transacao[]
+  eventos    EventoCobranca[]
+
+  @@index([status])
+  @@index([vencimento])
+  @@index([clienteId])
+  @@index([criadoEm])
+  @@map("cobrancas")
+}
+
+model ItemCobranca {
+  id         String @id @default(uuid())
+  cobrancaId String @map("cobranca_id")
+  descricao  String
+  quantidade Int    @default(1)
+  /// EM CENTAVOS.
+  valorUnitario Int @map("valor_unitario")
+  /// EM CENTAVOS. quantidade * valorUnitario.
+  valorTotal    Int @map("valor_total")
+
+  cobranca Cobranca @relation(fields: [cobrancaId], references: [id], onDelete: Cascade)
+
+  @@index([cobrancaId])
+  @@map("itens_cobranca")
+}
+
+/// Historico de eventos exibido na tela de detalhe da cobranca (secao 8.1).
+model EventoCobranca {
+  id         String             @id @default(uuid())
+  cobrancaId String             @map("cobranca_id")
+  tipo       TipoEventoCobranca
+  descricao  String?
+  /// Contexto adicional (ip de quem visualizou, id do evento do PSP, etc).
+  metadados  Json?
+  criadoEm   DateTime           @default(now()) @map("criado_em")
+
+  cobranca Cobranca @relation(fields: [cobrancaId], references: [id], onDelete: Cascade)
+
+  @@index([cobrancaId, criadoEm])
+  @@map("eventos_cobranca")
+}
+
+// -----------------------------------------------------------------------------
+// Recorrencias (mensalidades) - modelada na v1, gerada na Fase 2
+// -----------------------------------------------------------------------------
+
+model Recorrencia {
+  id            String        @id @default(uuid())
+  clienteId     String        @map("cliente_id")
+  descricao     String
+  /// EM CENTAVOS.
+  valor         Int
+  periodicidade Periodicidade
+  diaVencimento Int           @map("dia_vencimento")
+  dataInicio    DateTime      @map("data_inicio") @db.Date
+  dataFim       DateTime?     @map("data_fim") @db.Date
+  ativa         Boolean       @default(true)
+  criadoEm      DateTime      @default(now()) @map("criado_em")
+
+  cliente   Cliente    @relation(fields: [clienteId], references: [id])
+  cobrancas Cobranca[]
+
+  @@index([clienteId])
+  @@map("recorrencias")
+}
+
+// -----------------------------------------------------------------------------
+// Transacoes
+// -----------------------------------------------------------------------------
+
+model Transacao {
+  id             String          @id @default(uuid())
+  cobrancaId     String          @map("cobranca_id")
+  formaPagamento FormaPagamento  @map("forma_pagamento")
+  /// EM CENTAVOS.
+  valor          Int
+  status         StatusTransacao @default(pendente)
+  idNoPsp        String?         @map("id_no_psp")
+  /// Payload cru recebido do PSP, para auditoria e suporte.
+  /// Passa pelo sanitizador antes de ser gravado: nenhum dado de cartao
+  /// (numero, cvv, validade) pode ser persistido (secao 10, regra 7).
+  payloadBruto   Json?           @map("payload_bruto")
+  criadoEm       DateTime        @default(now()) @map("criado_em")
+
+  cobranca Cobranca @relation(fields: [cobrancaId], references: [id], onDelete: Cascade)
+
+  @@index([cobrancaId])
+  @@map("transacoes")
+}
+
+// -----------------------------------------------------------------------------
+// Webhooks
+// -----------------------------------------------------------------------------
+
+/// Idempotencia de webhook (secao 10, regra 3).
+/// idEventoPsp e UNIQUE: se o mesmo evento chegar duas vezes - e isso acontece
+/// com frequencia - a segunda insercao falha e o evento e ignorado. Sem isso o
+/// cliente recebe dois recibos e o relatorio conta o valor em dobro.
+model EventoWebhook {
+  id          String    @id @default(uuid())
+  idEventoPsp String    @unique @map("id_evento_psp")
+  tipo        String
+  payload     Json
+  processado  Boolean   @default(false)
+  /// Preenchido quando o processamento falha, para reprocessamento manual.
+  erro        String?
+  processadoEm DateTime? @map("processado_em")
+  recebidoEm  DateTime  @default(now()) @map("recebido_em")
+
+  @@index([processado])
+  @@map("eventos_webhook")
+}
+
+// -----------------------------------------------------------------------------
+// Auditoria
+// -----------------------------------------------------------------------------
+
+/// Log de auditoria imutavel (secao 10, regra 8).
+/// A aplicacao so insere. Nao existe caminho de codigo que edite ou apague
+/// registros desta tabela - e nao deve passar a existir.
+model LogAuditoria {
+  id              String   @id @default(uuid())
+  usuarioId       String?  @map("usuario_id")
+  acao            String
+  entidade        String
+  entidadeId      String?  @map("entidade_id")
+  dadosAnteriores Json?    @map("dados_anteriores")
+  dadosNovos      Json?    @map("dados_novos")
+  ip              String?
+  criadoEm        DateTime @default(now()) @map("criado_em")
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@index([entidade, entidadeId])
+  @@index([criadoEm])
+  @@map("logs_auditoria")
+}
