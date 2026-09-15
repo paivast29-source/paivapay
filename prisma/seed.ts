@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { hash } from "@node-rs/argon2";
 import { validarForcaSenha } from "../lib/auth/senha";
+import { urlBancoMigracoes } from "../lib/url-banco";
 
 // O seed roda como processo separado, fora do Next e fora do CLI do Prisma.
 try {
@@ -28,10 +29,9 @@ try {
 
 const db = new PrismaClient({
   adapter: new PrismaPg({
-    // Acompanha a escolha das migrations (ver prisma.config.ts): o seed roda no
-    // mesmo momento do deploy e nao ganha nada em passar pelo pooler.
-    connectionString:
-      process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL,
+    // Acompanha a escolha das migrations: o seed roda no mesmo momento do
+    // deploy e nao ganha nada em passar pelo pooler.
+    connectionString: urlBancoMigracoes(),
   }),
 });
 

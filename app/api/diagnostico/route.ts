@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ehVitrineDemonstracao } from "@/lib/ambiente";
 import { db } from "@/lib/db";
+import { urlBancoAplicacao, urlBancoMigracoes } from "@/lib/url-banco";
 
 /**
  * Diagnostico de ambiente.
@@ -38,7 +39,7 @@ export async function GET() {
   let banco: EstadoBanco;
   let temAdministrador: boolean | null = null;
 
-  if (!process.env.DATABASE_URL) {
+  if (!urlBancoAplicacao()) {
     banco = "variavel_ausente";
   } else {
     try {
@@ -85,6 +86,10 @@ export async function GET() {
     {
       banco,
       temAdministrador,
+      // Booleano apenas - a string carrega usuario e senha do banco.
+      // false aqui nao e erro: significa que migrations e aplicacao usam a
+      // mesma conexao, o que e o normal fora de provedor com pooler.
+      conexaoDiretaSeparada: urlBancoMigracoes() !== urlBancoAplicacao(),
       psp: process.env.PSP_PROVIDER || "mock",
       vitrineDemonstracao: ehVitrineDemonstracao(),
       appUrlConfigurada: Boolean(process.env.APP_URL),

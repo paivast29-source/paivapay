@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { urlBancoAplicacao } from "@/lib/url-banco";
 
 /**
  * Cliente do banco.
@@ -23,12 +24,12 @@ import { PrismaClient } from "@prisma/client";
  */
 
 function criarCliente(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = urlBancoAplicacao();
 
   if (!connectionString) {
     throw new Error(
-      "DATABASE_URL nao configurada. Em desenvolvimento: copie .env.example para .env e rode `npm run db:up`. " +
-        "Em producao: defina a variavel de ambiente apontando para o Postgres.",
+      "Nenhuma connection string encontrada. Em desenvolvimento: copie .env.example para .env e rode `npm run db:up`. " +
+        "Em producao: defina DATABASE_URL apontando para o Postgres.",
     );
   }
 

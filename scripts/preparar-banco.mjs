@@ -39,9 +39,17 @@ try {
  *    e melhor descobrir no deploy do que pelo usuario.
  */
 
-// As migrations preferem a conexao direta quando ela existe - ver o comentario
-// em prisma.config.ts sobre advisory locks e pooler.
-const urlBanco = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
+// As migrations preferem a conexao direta quando ela existe. Esta lista
+// espelha lib/url-banco.ts - nao da para importar de la porque aquele arquivo e
+// TypeScript e este script roda em Node puro, antes de qualquer transpilacao.
+// Se mexer em um, mexa no outro.
+const urlBanco =
+  process.env.DIRECT_DATABASE_URL ||
+  process.env.DATABASE_URL_UNPOOLED ||
+  process.env.POSTGRES_URL_NON_POOLING ||
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  process.env.POSTGRES_URL;
 
 if (!urlBanco) {
   console.log(
